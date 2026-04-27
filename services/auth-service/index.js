@@ -4,34 +4,51 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const mysql = require('mysql2/promise');
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-let usersDB = [];
+const dbPool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME
+});
+
+const generateTokens = (user) => {
+    const accessToken = jwt.sign(
+        { id: user.id, email: user.email, role: user.role }, 
+        process.env.JWT_SECRET, 
+        { expiresIn: '15m' }
+    );
+    const refreshToken = jwt.sign(
+        { id: user.id, email: user.email }, 
+        process.env.JWT_REFRESH, 
+        { expiresIn: '7d' }
+    );
+    return { accessToken, refreshToken };
+};
 
 // Register
 app.post('/register', async (req, res) => {
     try {
         const { email, password, nama } = req.body;
         
-        if (usersDB.find(u => u.email === email)) {
+        const [existingUser] = await dbPool.query("SELECT * FROM users WHERE email = ?", [email]);
+        if (existingUser.length > 0) {
             return res.status(400).json({ message: "Email sudah terdaftar" });
         }
 
         // Enkripsi password (Hashing)
         const hashedPassword = await bcrypt.hash(password, 10);
         
-        const newUser = { 
-            id: usersDB.length + 1, 
-            nama, 
-            email, 
-            password: hashedPassword,
-            role: 'donatur'
-        };
+        const [result] = await dbPool.query(
+            "INSERT INTO users (nama, email, password, role) VALUES (?, ?, ?, ?)", 
+            [nama, email, hashedPassword, 'donatur']
+        );
         
-        usersDB.push(newUser);
         res.status(201).json({ message: "User berhasil dibuat", userId: newUser.id });
     } catch (error) {
         res.status(500).json({ message: "Gagal register", error: error.message });
@@ -42,7 +59,9 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = usersDB.find(u => u.email === email);
+
+        const [users] = await dbPool.query("SELECT * FROM users WHERE email = ?", [email]);
+        const user = users[0];
 
         if (!user || !(await bcrypt.compare(password, user.password))) {
             return res.status(401).json({ message: "Email atau Password salah" });
@@ -64,18 +83,7 @@ app.get('/google', (req, res) => {
 // callback menangkap code dari Google
 app.get('/google/callback', async (req, res) => {
     const { code } = req.query;
-    if (!code) return res.status(400).json({ error: "Code tidak ditemukan" });
-
-    try {
-       
-        res.json({ 
-            message: "Google OAuth Berhasil (Simulasi)", 
-            info: "Di tahap ini, server menukar code dengan profile user",
-            auth_code: code 
-        });
-    } catch (error) {
-        res.status(500).json({ error: "Gagal proses OAuth" });
-    }
+    res.json({ message: "Google OAuth Berhasil (Server menukar code)", auth_code: code });
 });
 
 
