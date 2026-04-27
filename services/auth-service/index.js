@@ -38,7 +38,7 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// 2. Endpoint Login Lokal
+// Login Lokal
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -54,6 +54,31 @@ app.post('/login', async (req, res) => {
         res.status(500).json({ message: "Gagal login", error: error.message });
     }
 });
+
+// oatuh
+app.get('/google', (req, res) => {
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&response_type=code&scope=profile email`;
+    res.redirect(url);
+});
+
+// callback menangkap code dari Google
+app.get('/google/callback', async (req, res) => {
+    const { code } = req.query;
+    if (!code) return res.status(400).json({ error: "Code tidak ditemukan" });
+
+    try {
+       
+        res.json({ 
+            message: "Google OAuth Berhasil (Simulasi)", 
+            info: "Di tahap ini, server menukar code dengan profile user",
+            auth_code: code 
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Gagal proses OAuth" });
+    }
+});
+
+
 
 app.listen(process.env.PORT, () => {
     console.log(`AUTH SERVICE Berjalan di port ${process.env.PORT}`);
