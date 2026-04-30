@@ -25,6 +25,9 @@ const verifikasiToken = (req, res, next) => {
     if (err)
       return res.status(403).json({ error: "Token expired atau tidak valid." });
     req.user = decoded;
+
+    req.headers['x-user-info'] = JSON.stringify(decoded);
+    
     next();
   });
 };
