@@ -41,6 +41,43 @@ app.get('/', async (req, res) => {
     }
 });
 
+app.post('/', async (req, res) => {
+    try {
+        const { user_email, product_id } = req.body;
+
+        if (!user_email || !product_id) {
+            return res.status(400).json({ message: "Email dan ID Produk wajib diisi!" });
+        }
+
+        const productResponse = await fetch(`http://localhost:3000/products?id=${product_id}`);
+        
+        if (!productResponse.ok) {
+            return res.status(404).json({ message: "Produk tidak ditemukan di katalog." });
+        }
+
+        const productData = await productResponse.json();
+
+        const itemName = productData.name; 
+        const itemTotal = productData.price;
+
+        // Simpan pesanan ke database umkm_orders
+        const query = `INSERT INTO orders (user_email, item, total) VALUES (?, ?, ?)`;
+        await dbPool.query(query, [user_email, itemName, itemTotal]);
+
+        res.status(201).json({ 
+            message: "Pesanan berhasil dibuat secara otomatis!",
+            detail_pesanan: {
+                item: itemName,
+                total_harga: itemTotal
+            }
+        });
+
+    } catch (error) {
+        console.error("Error Sistem:", error);
+        res.status(500).json({ message: "Gagal memproses pesanan otomatis", error: error.message });
+    }
+});
+
 app.listen(3003, () => {
     console.log(`ORDER SERVICE berjalan di ${process.env.PORT} dan terhubung ke MySQL`);
 });

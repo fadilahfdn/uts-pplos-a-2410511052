@@ -41,6 +41,7 @@ app.use('/products', createProxyMiddleware({ target: 'http://localhost:3002', ch
 // Service Pesanan
 app.use('/orders', verifikasiToken, createProxyMiddleware({ target: 'http://localhost:3003', changeOrigin: true }));
 
+
 app.listen(PORT, () => {
     console.log(`GATEWAY Aktif di port ${PORT}`);
 });
