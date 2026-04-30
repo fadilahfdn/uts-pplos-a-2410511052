@@ -14,6 +14,27 @@ class ProductController {
         $db = $database->getConnection();
         $product = new Product($db);
 
+        if (isset($_GET['id'])) {
+            $id = $_GET['id'];
+            
+            // mengambil 1 produk saja
+            $query = "SELECT * FROM products WHERE id = :id LIMIT 0,1";
+            $stmt = $db->prepare($query);
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+
+            if($stmt->rowCount() > 0) {
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                http_response_code(200);
+                
+                echo json_encode($row); 
+            } else {
+                http_response_code(404);
+                echo json_encode(array("message" => "Produk dengan ID tersebut tidak ditemukan."));
+            }
+            return;
+        }
+
         $page = isset($_GET['page']) ? $_GET['page'] : 1;
         $category_id = isset($_GET['category']) ? $_GET['category'] : null;
         
