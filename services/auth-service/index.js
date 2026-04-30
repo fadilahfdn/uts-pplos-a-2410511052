@@ -3,7 +3,6 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
 const mysql = require('mysql2/promise');
 
 const app = express();
@@ -49,7 +48,7 @@ app.post('/register', async (req, res) => {
             [nama, email, hashedPassword, 'donatur']
         );
         
-        res.status(201).json({ message: "User berhasil dibuat", userId: newUser.id });
+        res.status(201).json({ message: "User berhasil dibuat", userId: result.insertId });
     } catch (error) {
         res.status(500).json({ message: "Gagal register", error: error.message });
     }
