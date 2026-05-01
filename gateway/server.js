@@ -3,9 +3,20 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 const rateLimit = require("express-rate-limit");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
+const mysql = require("mysql2/promise");
 
 const app = express();
 const PORT = 3000;
+
+const dbPool = mysql.createPool({
+  host: "localhost",
+  user: "root",       
+  password: "",       
+  database: "umkm_auth",
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000,
@@ -14,22 +25,38 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-const verifikasiToken = (req, res, next) => {
+const verifikasiToken = async (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
 
   if (!token)
     return res.status(401).json({ error: "Akses ditolak. Token tidak ada!" });
 
-  jwt.verify(token, "rahasia_umkm_jwt", (err, decoded) => {
-    if (err)
-      return res.status(403).json({ error: "Token expired atau tidak valid." });
-    req.user = decoded;
-
-    req.headers['x-user-info'] = JSON.stringify(decoded);
+  try {
     
-    next();
-  });
+    const [results] = await dbPool.query(
+      "SELECT * FROM token_blacklist WHERE token = ?", 
+      [token]
+    );
+
+    if (results.length > 0) {
+      return res.status(401).json({ error: "Sesi telah berakhir (Token Blacklisted). Silakan login kembali." });
+    }
+
+    jwt.verify(token, "rahasia_umkm_jwt", (err, decoded) => {
+      if (err)
+        return res.status(403).json({ error: "Token expired atau tidak valid." });
+      
+      req.user = decoded;
+      req.headers['x-user-info'] = JSON.stringify(decoded);
+      
+      next();
+    });
+
+  } catch (error) {
+    console.error("Database Error pada Gateway:", error);
+    return res.status(500).json({ error: "Terjadi kesalahan internal pada Gateway saat memverifikasi sesi." });
+  }
 };
 
 // Service Auth
