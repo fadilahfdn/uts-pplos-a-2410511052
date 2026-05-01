@@ -54,7 +54,7 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// Login Lokal
+// Login
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -62,7 +62,18 @@ app.post('/login', async (req, res) => {
         const [users] = await dbPool.query("SELECT * FROM users WHERE email = ?", [email]);
         const user = users[0];
 
-        if (!user || !(await bcrypt.compare(password, user.password))) {
+        if (!user) {
+            
+            return res.status(401).json({ message: "Email atau Password salah" });
+        }
+
+        if (user.password === null || user.oauth_provider !== null) {
+            return res.status(400).json({ 
+                message: `Akun ini terdaftar menggunakan ${user.oauth_provider}. Silakan gunakan fitur Login with ${user.oauth_provider}.` 
+            });
+        }
+
+        if (!(await bcrypt.compare(password, user.password))) {
             return res.status(401).json({ message: "Email atau Password salah" });
         }
 
@@ -114,7 +125,69 @@ app.get('/google', (req, res) => {
 // callback menangkap code dari Google
 app.get('/google/callback', async (req, res) => {
     const { code } = req.query;
-    res.json({ message: "Google OAuth Berhasil (Server menukar code)", auth_code: code });
+
+    if (!code) {
+        return res.status(400).json({ error: "Authorization code tidak ditemukan atau ditolak oleh pengguna." });
+    }
+
+    try {
+        
+        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code: code,
+                client_id: process.env.GOOGLE_CLIENT_ID,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET, 
+                redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+                grant_type: 'authorization_code'
+            })
+        });
+        const tokenData = await tokenResponse.json();
+
+        if (tokenData.error) {
+            return res.status(401).json({ error: "Gagal menukar kode otorisasi", detail: tokenData.error });
+        }
+
+        const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` }
+        });
+        const profileData = await profileResponse.json();
+
+        const { email, name, picture } = profileData;
+
+        const [users] = await dbPool.query("SELECT * FROM users WHERE email = ?", [email]);
+        let user = users[0];
+
+        if (!user) {
+            // User belum ada. Buat otomatis (Auto-Register)
+            const insertSql = "INSERT INTO users (nama, email, foto_profil, oauth_provider) VALUES (?, ?, ?, ?)";
+            const [result] = await dbPool.query(insertSql, [name, email, picture, 'google']);
+            const [newUsers] = await dbPool.query("SELECT * FROM users WHERE id = ?", [result.insertId]);
+            user = newUsers[0];
+        } else if (user.oauth_provider !== 'google') {
+            await dbPool.query("UPDATE users SET foto_profil = ?, oauth_provider = 'google' WHERE email = ?", [picture, email]);
+            user.foto_profil = picture;
+            user.oauth_provider = 'google';
+        }
+
+        const localTokens = generateTokens(user); 
+        
+        res.json({
+            message: "Login OAuth Google Berhasil",
+            user: { 
+                nama: user.nama, 
+                email: user.email, 
+                foto: user.foto_profil,
+                provider: user.oauth_provider 
+            },
+            ...localTokens
+        });
+
+    } catch (error) {
+        console.error("OAuth Internal Error:", error);
+        res.status(500).json({ message: "Terjadi kesalahan internal saat memproses otentikasi OAuth", error: error.message });
+    }
 });
 
 
