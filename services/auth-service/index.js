@@ -73,6 +73,38 @@ app.post('/login', async (req, res) => {
     }
 });
 
+app.post('/refresh', (req, res) => {
+    const { refresh_token } = req.body;
+    
+    if (!refresh_token) {
+        return res.status(401).json({ message: "Refresh token diperlukan" });
+    }
+
+    jwt.verify(refresh_token, process.env.JWT_REFRESH_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ message: "Refresh token tidak valid atau kedaluwarsa" });
+
+        const newAccessToken = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '15m' });
+        res.json({ access_token: newAccessToken });
+    });
+});
+
+app.post('/logout', async (req, res) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) return res.status(400).json({ message: "Token tidak ditemukan" });
+
+    try {
+
+        const sql = "INSERT INTO token_blacklist (token) VALUES (?)";
+        await dbPool.query(sql, [token]);
+
+        res.status(200).json({ message: "Logout berhasil, token telah diblokir" });
+    } catch (error) {
+        res.status(500).json({ message: "Terjadi kesalahan pada server" });
+    }
+});
+
 // oatuh
 app.get('/google', (req, res) => {
     const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&response_type=code&scope=profile email`;
