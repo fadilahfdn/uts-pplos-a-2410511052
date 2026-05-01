@@ -21,7 +21,11 @@ const dbPool = mysql.createPool({
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 60,
-  message: { error: "Trafik penuh, tunggu sebentar." },
+  message: { 
+        error: "Terlalu banyak permintaan dari IP ini. Silakan coba lagi setelah 1 menit." 
+    },
+    standardHeaders: true, 
+    legacyHeaders: false,
 });
 app.use(limiter);
 
